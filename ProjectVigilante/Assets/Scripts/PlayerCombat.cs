@@ -8,6 +8,7 @@ public class PlayerCombat : MonoBehaviour
     public float attackRadius = 10f;
     public float forwardBias = 0.75f; // How much more 'pull' enemies in front of the player have when determining which target to attack.
     public float endDistance = 1f;
+    public float attackDamage = 10f; //damage of player
 
     private void Update()
     {
@@ -62,6 +63,13 @@ public class PlayerCombat : MonoBehaviour
         {
             transform.position = Vector3.MoveTowards(transform.position, target.position, Time.deltaTime * 20f);
             yield return null;
+        }
+        
+        // Damage logic
+        IDamageable damageable = target.GetComponent<IDamageable>();
+        if (damageable != null)
+        {
+            damageable.TakeDamage(attackDamage);
         }
     }
 }
