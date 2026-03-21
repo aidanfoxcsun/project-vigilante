@@ -1,47 +1,28 @@
 using UnityEngine;
 using System.Collections;
 
-public class BasicEnemy : MonoBehaviour, ITarget, IDamageable
+public class EnemyMovement : MonoBehaviour
 {
+
     public Transform player;
     private UnityEngine.AI.NavMeshAgent agent;
     private CharacterController characterController;
-    private Coroutine MovementCoroutine;
 
-
-    [Header("Enemy Stats")]
-    public float health = 20;
-    private float moveSpeed = 1;
-    [SerializeField] private Vector3 moveDirection;
     // radius from center of the player that the enemy will stop at
     public float stoppingDistance;
+    [SerializeField] private Vector3 moveDirection;
 
-    [Header("Enemy States")]
+    // movement stats
+    private float moveSpeed = 1;
+
+    // States
+    private bool MovementCoroutineActive = false;
     [SerializeField] private bool isMoving;
     [SerializeField] private bool isWaiting = true;
-    [SerializeField] private bool isPreparingAttack;
-    [SerializeField] private bool isRetreating;
-    [SerializeField] private bool isStunned;
-    private bool MovementCoroutineActive = false;
 
-//-----------------------------------INTERFACES--------------------------//
+    private Coroutine MovementCoroutine;
 
-    public Transform GetTransform()
-    {
-        return transform;
-    }
-
-    public void TakeDamage(float damage)
-    {
-        health -= damage;
-        Debug.Log("Enemy took " + damage + " damage. Remaining health: " + health);
-        if (health <= 0)
-        {
-            Destroy(gameObject);
-        }
-    }
-
-    //---------------------------------MOVEMENT--------------------------//
+    // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
         agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
@@ -81,6 +62,7 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable
 
     }
 
+    // Update is called once per frame
     void Update()
     {
         if (player != null)
@@ -169,4 +151,5 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable
         isMoving = false;
         moveDirection = Vector3.zero;
     }
+
 }
