@@ -3,11 +3,14 @@ using System.Collections;
 
 public class BasicEnemy : MonoBehaviour, ITarget, IDamageable
 {
+    //-----------------------------------DECLARES--------------------------//
     public Transform player;
     private UnityEngine.AI.NavMeshAgent agent;
     private CharacterController characterController;
+    private EnemyManager enemyManager;
     private Coroutine MovementCoroutine;
-
+    private Coroutine PrepareAttackCoroutine;
+    private Coroutine RetreatCoroutine;
 
     [Header("Enemy Stats")]
     public float health = 20;
@@ -24,7 +27,18 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable
     [SerializeField] private bool isStunned;
     private bool MovementCoroutineActive = false;
 
-//-----------------------------------INTERFACES--------------------------//
+    //-----------------------------------ENEMY MANAGER BOOLS--------------------------//
+    public bool IsPreparingAttack()
+    {
+        return isPreparingAttack; 
+    }
+
+    public bool IsRetreating()
+    {
+        return isRetreating; 
+    }
+
+    //-----------------------------------INTERFACES--------------------------//
 
     public Transform GetTransform()
     {
@@ -37,6 +51,7 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable
         Debug.Log("Enemy took " + damage + " damage. Remaining health: " + health);
         if (health <= 0)
         {
+            Death();
             Destroy(gameObject);
         }
     }
@@ -44,6 +59,9 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable
     //---------------------------------MOVEMENT--------------------------//
     void Start()
     {
+        // comment out when manager under dev. //
+        enemyManager = GetComponentInParent<EnemyManager>();
+        // ----------------------------------- //
         agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
         characterController = GetComponent<CharacterController>();
         agent.stoppingDistance = 0f;
@@ -109,6 +127,7 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable
             else
             {
                 Debug.Log("Enemy in range");
+                enemyManager.SetEnemyAvailiability(this, true);
                 // keeps looking at player
                 transform.LookAt(player);
 
@@ -130,6 +149,82 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable
         //}
     }
 
+    void Death()
+    {
+        StopCoroutinesEnemy();
+        enemyManager.SetEnemyAvailiability(this, false);
+
+    }
+
+    //--------------------------RETREAT LOGIC---------------------------//
+
+    public void SetRetreat()
+    {
+        StopCoroutinesEnemy();
+        Debug.Log("Preparing to retreat...");
+        RetreatCoroutine = StartCoroutine(PrepRetreat());
+
+        IEnumerator PrepRetreat()
+        {
+            yield return new WaitForSeconds(1.4f);
+            isRetreating = true;
+            moveDirection = -Vector3.forward;
+            isMoving = true;
+            stoppingDistance = 8f;
+            Debug.Log("Retreating!");
+
+            yield return new WaitUntil(() => Vector3.Distance(transform.position, player.position) > 6f);
+            Debug.Log("Retreat successful");
+            isRetreating = false;
+            StopMoving();
+
+            isWaiting = true;
+            MovementCoroutine = StartCoroutine(EncircleEnemyMovement());
+            agent.radius = 1.0f;
+            stoppingDistance = Random.Range(4.0f, 10.0f);
+
+        }
+    }
+
+
+    //--------------------------ATTACK LOGIC---------------------------//
+    public void SetAttack()
+    {
+        isWaiting = false;
+        Debug.Log("Preparing to attack...");
+        PrepareAttackCoroutine = StartCoroutine(PrepAttack());
+
+        IEnumerator PrepAttack()
+        {
+            PrepareAttack(true);
+            yield return new WaitForSeconds(0.2f);
+            Debug.Log("Attacking!");
+            agent.radius = 0.5f;
+            stoppingDistance = 1.5f;
+            moveDirection = Vector3.forward;
+            isMoving = true;
+        }
+    }
+
+    //-------------------------COUNTER MECHANIC LOGIC BOOL----------------------//
+    void PrepareAttack (bool active)
+    {
+        isPreparingAttack = active;
+
+        if (active)
+        {
+            //counter animations
+        }
+
+        else
+        {
+            {
+                StopMoving();
+                //counter animations
+            }
+        }
+    }
+
     void MoveEnemy(Vector3 direction)
     {
         moveSpeed = 1;
@@ -138,6 +233,11 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable
             moveSpeed = 5;
         if (direction == -Vector3.forward)
             moveSpeed = 2f;
+
+        //animator stuff here?
+        //-------//
+
+        //-------//
 
         if (!isMoving)
             return;
@@ -161,6 +261,16 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable
         movedir += finalDirection * moveSpeed * Time.deltaTime;
 
         characterController.Move(movedir);
+        if (!isPreparingAttack) return;
+
+
+        //attack logic
+        if (Vector3.Distance(transform.position, player.position) < 2)
+        {
+            StopMoving();
+            Debug.Log("Player has been attacked");
+            PrepareAttack(false);
+        }
     }
 
 
@@ -168,5 +278,32 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable
     {
         isMoving = false;
         moveDirection = Vector3.zero;
+        //characterController.Move(moveDirection);
+    }
+
+    void StopCoroutinesEnemy()
+    {
+        PrepareAttack(false);
+
+        if (isRetreating)
+        {
+            if (RetreatCoroutine != null)
+            {
+                StopCoroutine(RetreatCoroutine);
+                Debug.Log("Retreat Coroutine stopped");
+            }
+        }
+
+        if (PrepareAttackCoroutine != null)
+        {
+            StopCoroutine(PrepareAttackCoroutine);
+            Debug.Log("Attack Coroutine stopped");
+        }
+
+        if (MovementCoroutine != null)
+        {
+            StopCoroutine(MovementCoroutine);
+            Debug.Log("Movement Coroutine stopped");
+        }
     }
 }
