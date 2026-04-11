@@ -36,9 +36,14 @@ public class PlayerCombat : MonoBehaviour
             }
         }
 
-        if (gamepad == null || attacking) return;
+        if (attacking) return; // Add combo system
 
-        if (gamepad.buttonWest.wasPressedThisFrame && targetsInRange.Count > 0)
+        if (gamepad == null && Input.GetKeyDown(KeyCode.Space) && targetsInRange.Count > 0)
+        {
+            StartCoroutine(ZipToTarget(GetClosestTarget(targetsInRange)));
+            Debug.Log("Attacking target: " + GetClosestTarget(targetsInRange).name);
+        }
+        else if (gamepad.buttonWest.wasPressedThisFrame && targetsInRange.Count > 0)
         {
             StartCoroutine(ZipToTarget(GetClosestTarget(targetsInRange)));
             Debug.Log("Attacking target: " + GetClosestTarget(targetsInRange).name);
@@ -138,7 +143,13 @@ public class PlayerCombat : MonoBehaviour
         {
             // 1. Deal Damage
             IDamageable damageable = target.GetComponent<IDamageable>();
-            if (damageable != null) damageable.TakeDamage(attackDamage);
+            if (damageable != null) {
+
+                damageable.TakeDamage(attackDamage);
+
+                if (ComboManager.Instance != null)
+                    ComboManager.Instance.RegisterHit();
+            }
 
             // 2. Launch the Enemy
             Rigidbody targetRb = target.GetComponent<Rigidbody>();

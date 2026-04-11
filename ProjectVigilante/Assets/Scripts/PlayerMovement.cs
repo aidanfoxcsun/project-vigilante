@@ -18,16 +18,24 @@ public class PlayerMovement : MonoBehaviour
     private void Update()
     {
         Gamepad gamepad = Gamepad.current;
-        if (gamepad == null || dashing) return;
+        if (dashing) return;
 
         Vector3 lookDir = mainCamera.transform.forward;
         lookDir.y = 0;
         Vector3 moveDir = lookDir.normalized;
         Vector3 rightDir = Vector3.Cross(Vector3.up, moveDir).normalized;
 
-
-        moveInput = gamepad.leftStick.ReadValue();
-        sprinting = gamepad.buttonSouth.IsPressed();
+        if (gamepad != null)
+        {
+            moveInput = gamepad.leftStick.ReadValue();
+            sprinting = gamepad.buttonSouth.IsPressed();
+        }
+        else
+        {
+            moveInput.x = Input.GetAxis("Horizontal");
+            moveInput.y = Input.GetAxis("Vertical");
+            sprinting = Input.GetKey(KeyCode.LeftShift);
+        }
 
         if (moveDir != Vector3.zero) transform.rotation = Quaternion.LookRotation(moveDir);
 
