@@ -1,33 +1,74 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
+using System.Collections;
 
 public class PlayerMovement : MonoBehaviour
 {
     [SerializeField] private float moveSpeed = 5f;
+    [SerializeField] private float sprintFactor = 1.2f;
+    [SerializeField] private float dashSpeed = 20f;
+    [SerializeField] private float dashDuration = 0.2f;
+    [SerializeField] private float dashCooldown = 0.5f;
     [SerializeField] private Camera mainCamera;
+
+    private Vector2 moveInput;
+    private bool sprinting = false;
+    private bool dashing = false;
 
     private void Update()
     {
+        Gamepad gamepad = Gamepad.current;
+        if (dashing) return;
+
         Vector3 lookDir = mainCamera.transform.forward;
-        Vector3 moveDir = new Vector3(lookDir.x, 0, lookDir.z).normalized;
+        lookDir.y = 0;
+        Vector3 moveDir = lookDir.normalized;
         Vector3 rightDir = Vector3.Cross(Vector3.up, moveDir).normalized;
 
-        transform.rotation = Quaternion.LookRotation(moveDir);
+        if (gamepad != null)
+        {
+            moveInput = gamepad.leftStick.ReadValue();
+            sprinting = gamepad.buttonSouth.IsPressed();
+        }
+        else
+        {
+            moveInput.x = Input.GetAxis("Horizontal");
+            moveInput.y = Input.GetAxis("Vertical");
+            sprinting = Input.GetKey(KeyCode.LeftShift);
+        }
 
-        if (Input.GetKey(KeyCode.W))
+        if (moveDir != Vector3.zero) transform.rotation = Quaternion.LookRotation(moveDir);
+
+        if(gamepad.buttonEast.wasPressedThisFrame)
         {
-            transform.position += moveDir * moveSpeed * Time.deltaTime;
+            StartCoroutine(Dash(moveDir, rightDir));
+            return;
         }
-        if (Input.GetKey(KeyCode.S))
+
+        float newMoveSpeed = sprinting ? moveSpeed * sprintFactor : moveSpeed;
+
+        if (moveInput.magnitude > 0.1f)
         {
-            transform.position -= moveDir * moveSpeed * Time.deltaTime;
+            transform.position += moveDir * moveInput.y * newMoveSpeed * Time.deltaTime;
+            transform.position += rightDir * moveInput.x * newMoveSpeed * Time.deltaTime;
+            return;
         }
-        if (Input.GetKey(KeyCode.A))
+    }
+
+    private IEnumerator Dash(Vector3 moveDir, Vector3 rightDir)
+    {
+        dashing = true;
+
+        Vector3 dashDir = moveDir * moveInput.y + rightDir * moveInput.x;
+        if (dashDir.magnitude < 0.1f) dashDir = transform.forward;
+
+        float startTime = Time.time;
+        while (Time.time < startTime + dashDuration)
         {
-            transform.position -= rightDir * moveSpeed * Time.deltaTime;
+            transform.position += dashDir * dashSpeed * Time.deltaTime;
+            yield return null;
         }
-        if (Input.GetKey(KeyCode.D))
-        {
-            transform.position += rightDir * moveSpeed * Time.deltaTime;
-        }
+        yield return new WaitForSeconds(dashCooldown);
+        dashing = false;
     }
 }
