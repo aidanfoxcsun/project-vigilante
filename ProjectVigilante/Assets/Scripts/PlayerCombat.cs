@@ -6,18 +6,31 @@ using UnityEngine.Rendering;
 
 public class PlayerCombat : MonoBehaviour
 {
-    // Check Radius around player for enemies (ITargets). When attack is triggered, choose the closest and most front enemy to attack.
+    [Header("Attack Settings")]
     public float attackRadius = 10f;
-    public float forwardBias = 0.75f; // How much more 'pull' enemies in front of the player have when determining which target to attack.
+    public float forwardBias = 0.75f;
     public float endDistance = 1f;
-    public float attackDamage = 10f; //damage of player
-    public float jumpArcHeight = 2f; //height of the arc when player zips to target
+    public float attackDamage = 10f;
+    public float jumpArcHeight = 2f;
 
     [Header("Launcher Settings")]
-    public float launchForce = 10f; // How hard to hit them upwards
-    public float launchForwardPunch = 2f; // Slight forward nudge so they fly away from you
+    public float launchForce = 10f;
+    public float launchForwardPunch = 2f;
 
-    private bool attacking = false;
+    [Header("Counter Settings")]
+    // How long after SignalAttack the player can press counter.
+    public float counterWindowDuration = 1.2f;
+    // Damage multiplier applied to a successful counter hit.
+    public float counterDamageMultiplier = 1.5f;
+
+    // private state 
+    private bool attacking;
+    private bool countering;
+
+    // The enemy currently offering a counter opportunity.
+    private IAttacker pendingCounterAttacker;
+    private Transform pendingCounterTransform;
+    private Coroutine counterWindowCoroutine;
 
     private void Update()
     {
@@ -26,29 +39,125 @@ public class PlayerCombat : MonoBehaviour
         Collider[] hitColliders = Physics.OverlapSphere(transform.position, attackRadius);
         List<ITarget> targetsInRange = new List<ITarget>();
 
-        foreach (Collider hitCollider in hitColliders)
+        foreach (Collider col in hitColliders)
         {
-            ITarget target = hitCollider.GetComponent<ITarget>();
-            if (target != null)
-            {
-                targetsInRange.Add(target);
+            ITarget t = col.GetComponent<ITarget>();
+            if (t != null) targetsInRange.Add(t);
 
-            }
+            // Subscribe to any new IAttacker enemies that enter range.
+            IAttacker attacker = col.GetComponent<IAttacker>();
+            if (attacker != null)
+                SubscribeToAttacker(attacker);
         }
 
-        if (attacking) return; // Add combo system
+        // Counter input (takes priority over a normal attack) 
+        bool counterPressed = (gamepad != null)
+            ? gamepad.buttonNorth.wasPressedThisFrame          // Triangle / Y
+            : Input.GetKeyDown(KeyCode.Q);
 
-        if (gamepad == null && Input.GetKeyDown(KeyCode.Space) && targetsInRange.Count > 0)
+        if (counterPressed && pendingCounterAttacker != null)
         {
-            StartCoroutine(ZipToTarget(GetClosestTarget(targetsInRange)));
-            Debug.Log("Attacking target: " + GetClosestTarget(targetsInRange).name);
-        }
-        else if (gamepad.buttonWest.wasPressedThisFrame && targetsInRange.Count > 0)
-        {
-            StartCoroutine(ZipToTarget(GetClosestTarget(targetsInRange)));
-            Debug.Log("Attacking target: " + GetClosestTarget(targetsInRange).name);
+            StartCoroutine(PerformCounter());
+            return;
         }
 
+        // Normal attack input
+        if (attacking || countering) return;
+
+        bool attackPressed = (gamepad != null)
+            ? gamepad.buttonWest.wasPressedThisFrame
+            : Input.GetKeyDown(KeyCode.Space);
+
+        if (attackPressed && targetsInRange.Count > 0)
+        {
+            Transform best = GetClosestTarget(targetsInRange);
+            StartCoroutine(ZipToTarget(best, isCounter: false));
+        }
+
+    }
+
+    private readonly HashSet<IAttacker> subscribedAttackers = new();
+
+    private void SubscribeToAttacker(IAttacker attacker)
+    {
+        if (subscribedAttackers.Contains(attacker)) return;
+        subscribedAttackers.Add(attacker);
+        attacker.OnAttackSignaled += HandleAttackSignaled;
+        attacker.OnAttackCanceled += HandleAttackCanceled;
+    }
+
+    private void HandleAttackSignaled(IAttacker attacker)
+    {
+        // Only track the nearest / most urgent threat.
+        Transform t = (attacker as MonoBehaviour)?.transform;
+        if (t == null) return;
+
+        // If a counter window is already open, only replace if this enemy is closer.
+        if (pendingCounterAttacker != null)
+        {
+            float existingDist = Vector3.Distance(transform.position, pendingCounterTransform.position);
+            float newDist = Vector3.Distance(transform.position, t.position);
+            if (newDist >= existingDist) return;
+        }
+
+        // Cancel any existing window and open a fresh one.
+        if (counterWindowCoroutine != null)
+            StopCoroutine(counterWindowCoroutine);
+
+        pendingCounterAttacker = attacker;
+        pendingCounterTransform = t;
+        counterWindowCoroutine = StartCoroutine(CounterWindowTimer());
+
+        Debug.Log($"[Counter] Window opened — threat: {t.name}");
+    }
+
+    private void HandleAttackCanceled(IAttacker attacker)
+    {
+        if (attacker != pendingCounterAttacker) return;
+        CloseCounterWindow();
+    }
+
+    private IEnumerator CounterWindowTimer()
+    {
+        yield return new WaitForSeconds(counterWindowDuration);
+        CloseCounterWindow();
+        Debug.Log("[Counter] Window expired.");
+    }
+
+    private void CloseCounterWindow()
+    {
+        if (counterWindowCoroutine != null)
+        {
+            StopCoroutine(counterWindowCoroutine);
+            counterWindowCoroutine = null;
+        }
+        pendingCounterAttacker = null;
+        pendingCounterTransform = null;
+    }
+
+    // Counter coroutine
+
+    private IEnumerator PerformCounter()
+    {
+        if (pendingCounterAttacker == null) yield break;
+
+        // Snapshot target before clearing state.
+        IAttacker attacker = pendingCounterAttacker;
+        Transform target = pendingCounterTransform;
+
+        CloseCounterWindow();
+        countering = true;
+        attacking = false; // Interrupt any normal attack in progress.
+
+        // Interrupt the enemy's wind-up so their attack never lands.
+        attacker.InterruptAttack();
+
+        Debug.Log($"[Counter] Countering {target.name}!");
+
+        // Reuse ZipToTarget with the counter flag so we can apply the bonus.
+        yield return StartCoroutine(ZipToTarget(target, isCounter: true));
+
+        countering = false;
     }
 
     private bool HasLineOfSight(Transform target)
@@ -85,85 +194,80 @@ public class PlayerCombat : MonoBehaviour
         return closestTarget;
     }
 
-    private IEnumerator ZipToTarget(Transform target)
+    private IEnumerator ZipToTarget(Transform target, bool isCounter)
     {
-        if(!HasLineOfSight(target))
+        if (!HasLineOfSight(target))
         {
-            Debug.Log("No line of sight to target. Aborting attack.");
+            Debug.Log("[Combat] No line of sight. Aborting.");
             yield break;
         }
 
-        attacking = true;
-        if (target == null) yield break; // Safety check
+        attacking = !isCounter; // Counters set `countering` instead.
+
+        if (target == null) yield break;
 
         Vector3 startPos = transform.position;
+        Vector3 dirFromTargetToPlayer = (startPos - target.position).normalized;
+        Vector3 finalLandingPoint = target.position + dirFromTargetToPlayer * endDistance;
 
-        // Calculate the actual landing point: 
-        // target position + vector pointing from target TO player * endDistance
-        Vector3 directionFromTargetToPlayer = (startPos - target.position).normalized;
-        Vector3 finalLandingPoint = target.position + (directionFromTargetToPlayer * endDistance);
-
-        // Make sure we always face the target's center
         transform.rotation = Quaternion.LookRotation((target.position - transform.position).normalized);
 
-        float elapsedTime = 0f;
         float distance = Vector3.Distance(startPos, finalLandingPoint);
-        float duration = distance / 20f; // Dynamic speed
+        float duration = Mathf.Max(distance / 20f, 0.1f);
 
-        // Ensure we don't have duration of zero if standing on the landing point
-        if (duration <= 0) duration = 0.1f;
+        // Counters are snappier — halve the travel time for that reactive feel.
+        if (isCounter) duration *= 0.5f;
 
+        float elapsedTime = 0f;
         while (elapsedTime < duration)
         {
             elapsedTime += Time.deltaTime;
-            float normalizedTime = elapsedTime / duration; // 0 to 1
-
-            // Use a slight "S" curve for smoother motion (optional but looks nice)
-            // normalizedTime = Mathf.SmoothStep(0f, 1f, normalizedTime);
-
-            // Lerp toward the PRE-CALCULATED static landing point, not the target itself
-            Vector3 currentLerpPos = Vector3.Lerp(startPos, finalLandingPoint, normalizedTime);
-
-            // Apply the Arc (sine wave)
-            float arcHeight = Mathf.Sin(normalizedTime * Mathf.PI) * jumpArcHeight * Mathf.Log(distance);
-            currentLerpPos.y += arcHeight;
-
-            transform.position = currentLerpPos;
-
-            // We only rotate at the start of the jump to keep the snap minimal
-
+            float t = elapsedTime / duration;
+            Vector3 lerpPos = Vector3.Lerp(startPos, finalLandingPoint, t);
+            float arcScale = isCounter ? jumpArcHeight * 0.4f : jumpArcHeight;
+            lerpPos.y += Mathf.Sin(t * Mathf.PI) * arcScale * Mathf.Log(Mathf.Max(distance, 1f));
+            transform.position = lerpPos;
             yield return null;
         }
 
-        // Ensure we land exactly at the landing point
         transform.position = finalLandingPoint;
 
-        // --- Damage logic (requires target still exist) ---
         if (target != null)
         {
-            // 1. Deal Damage
             IDamageable damageable = target.GetComponent<IDamageable>();
-            if (damageable != null) {
+            if (damageable != null)
+            {
+                float damage = isCounter
+                    ? attackDamage * counterDamageMultiplier
+                    : attackDamage;
 
-                damageable.TakeDamage(attackDamage);
+                damageable.TakeDamage(damage);
 
                 if (ComboManager.Instance != null)
                     ComboManager.Instance.RegisterHit();
+
+                if (isCounter)
+                    Debug.Log($"[Counter] Hit! {damage} damage (×{counterDamageMultiplier}).");
             }
 
-            // 2. Launch the Enemy
-            Rigidbody targetRb = target.GetComponent<Rigidbody>();
-            if (targetRb != null)
+            Rigidbody rb = target.GetComponent<Rigidbody>();
+            if (rb != null)
             {
-                // Calculate launch vector: Straight up + a bit of forward "oomph"
                 Vector3 launchDir = Vector3.up * launchForce + transform.forward * launchForwardPunch;
-
-                // ForceMode.Impulse is best for instant bursts (ignoring mass if you want)
-                targetRb.AddForce(launchDir, ForceMode.Impulse);
-
-                Debug.Log($"Launched {target.name} into the air!");
+                rb.AddForce(launchDir, ForceMode.Impulse);
             }
         }
+
         attacking = false;
+        countering = false;
+    }
+
+    private void OnDestroy()
+    {
+        foreach (IAttacker a in subscribedAttackers)
+        {
+            a.OnAttackSignaled -= HandleAttackSignaled;
+            a.OnAttackCanceled -= HandleAttackCanceled;
+        }
     }
 }
