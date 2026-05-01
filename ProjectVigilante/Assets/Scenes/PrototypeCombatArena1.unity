@@ -8062,6 +8062,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BasicEnemy
   health: 100
+  counterIndicator: {fileID: 0}
+  animator: {fileID: 0}
 --- !u!54 &783213518
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -8218,6 +8220,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BasicEnemy
   health: 100
+  counterIndicator: {fileID: 0}
+  animator: {fileID: 0}
 --- !u!54 &791741335
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -17454,6 +17458,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BasicEnemy
   health: 100
+  counterIndicator: {fileID: 0}
+  animator: {fileID: 0}
 --- !u!54 &1406780411
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -27082,6 +27088,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BasicEnemy
   health: 100
+  counterIndicator: {fileID: 0}
+  animator: {fileID: 0}
 --- !u!54 &1571473459
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -28394,6 +28402,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BasicEnemy
   health: 100
+  counterIndicator: {fileID: 0}
+  animator: {fileID: 0}
 --- !u!54 &1625510597
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -30838,6 +30848,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BasicEnemy
   health: 100
+  counterIndicator: {fileID: 0}
+  animator: {fileID: 0}
 --- !u!54 &1985492286
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -32289,6 +32301,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BasicEnemy
   health: 100
+  counterIndicator: {fileID: 0}
+  animator: {fileID: 0}
 --- !u!54 &2109243528
 Rigidbody:
   m_ObjectHideFlags: 0
