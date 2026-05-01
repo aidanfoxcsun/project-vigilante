@@ -17,7 +17,6 @@ public class EnemyManager : MonoBehaviour
     void Start()
     {
         enemies = GetComponentsInChildren<BasicEnemy>();
-
         allEnemies = new EnemyStruct[enemies.Length];
 
         for (int i = 0; i < allEnemies.Length; i++)
@@ -32,57 +31,91 @@ public class EnemyManager : MonoBehaviour
     public void BeginAI()
     {
         Debug.Log("Beginning AI loop");
+
+        // Stop any existing loop before starting a new one
+        if (AI_Loop_Coroutine != null)
+            StopCoroutine(AI_Loop_Coroutine);
+
         AI_Loop_Coroutine = StartCoroutine(AI_Loop(null));
     }
 
     //-----------------------------------MAIN LOGIC LOOP--------------------------//
-    IEnumerator AI_Loop (BasicEnemy enemy)
+    IEnumerator AI_Loop(BasicEnemy lastAttacker)
     {
         Debug.Log("Loop started");
+
         if (LivingEnemyCount() == 0)
         {
-            StopCoroutine(AI_Loop(null));
-            yield break;
+            Debug.Log("No living enemies. Stopping AI loop.");
+            yield break; // Just yield break — don't call StopCoroutine(AI_Loop(null)), that starts a NEW coroutine
         }
 
         yield return new WaitForSeconds(Random.Range(0.5f, 1.5f));
 
-        BasicEnemy attackingEnemy = RandomEnemyExcludingOne(enemy);
+        // Try to pick someone other than the last attacker, fall back to any enemy
+        BasicEnemy attackingEnemy = RandomEnemyExcludingOne(lastAttacker) ?? RandomEnemy();
 
         if (attackingEnemy == null)
         {
-            Debug.Log("First time attacking, choosing random enemy");
-            attackingEnemy = RandomEnemy();
-        }
-
-        if (attackingEnemy == null)
-        {
-            Debug.Log("Attacking enemy not found!");
+            Debug.Log("No available enemy found. Retrying loop.");
             AI_Loop_Coroutine = StartCoroutine(AI_Loop(null));
             yield break;
         }
 
-        yield return new WaitUntil(() => attackingEnemy.IsRetreating() == false);
+        // Wait until the chosen enemy has finished retreating, with a dead-enemy guard
+        yield return new WaitUntil(() =>
+            attackingEnemy == null ||
+            !attackingEnemy.IsRetreating());
 
-        Debug.Log(attackingEnemy + "assigned to attack!");
+        // Enemy may have died while we were waiting
+        if (attackingEnemy == null || !IsEnemyAlive(attackingEnemy))
+        {
+            Debug.Log("Chosen enemy died while waiting to attack. Restarting loop.");
+            AI_Loop_Coroutine = StartCoroutine(AI_Loop(null));
+            yield break;
+        }
+
+        Debug.Log($"{attackingEnemy.name} assigned to attack!");
         attackingEnemy.SetAttack();
 
-        yield return new WaitUntil(() => attackingEnemy.IsPreparingAttack() == false);
+        // Wait until the attack wind-up finishes, with a dead-enemy guard
+        yield return new WaitUntil(() =>
+            attackingEnemy == null ||
+            !attackingEnemy.IsPreparingAttack());
 
-        Debug.Log(attackingEnemy + "assigned to retreat!");
+        if (attackingEnemy == null || !IsEnemyAlive(attackingEnemy))
+        {
+            Debug.Log("Attacking enemy died mid-attack. Restarting loop.");
+            AI_Loop_Coroutine = StartCoroutine(AI_Loop(null));
+            yield break;
+        }
+
+        Debug.Log($"{attackingEnemy.name} assigned to retreat!");
         attackingEnemy.SetRetreat();
 
-        yield return new WaitForSeconds(Random.Range(0, 1.5f));
+        yield return new WaitForSeconds(Random.Range(0f, 1.5f));
 
         if (LivingEnemyCount() > 0)
         {
-            Debug.Log("Restarting loop");
+            Debug.Log("Restarting loop.");
             AI_Loop_Coroutine = StartCoroutine(AI_Loop(attackingEnemy));
         }
     }
 
     //------------------------------METHODS--------------------------//
-    // Picks random enemy from list
+
+    // Checks whether a specific enemy is still alive in allEnemies
+    public bool IsEnemyAlive(BasicEnemy enemy)
+    {
+        for (int i = 0; i < allEnemies.Length; i++)
+        {
+            if (allEnemies[i].basicEnemy == enemy)
+                return true;
+        }
+        return false;
+    }
+
+    // Picks a random available enemy
     public BasicEnemy RandomEnemy()
     {
         enemyIndexes = new List<int>();
@@ -93,17 +126,13 @@ public class EnemyManager : MonoBehaviour
                 enemyIndexes.Add(i);
         }
 
-        if (enemyIndexes.Count == 0)
-            return null;
+        if (enemyIndexes.Count == 0) return null;
 
-        BasicEnemy randomEnemy;
         int randomIndex = Random.Range(0, enemyIndexes.Count);
-        randomEnemy = allEnemies[enemyIndexes[randomIndex]].basicEnemy;
-
-        return randomEnemy;
+        return allEnemies[enemyIndexes[randomIndex]].basicEnemy;
     }
 
-    // Picks random enemy from list while ignoring previously attacking enemy (same enemy wont attack twice)
+    // Picks a random available enemy excluding the last attacker
     public BasicEnemy RandomEnemyExcludingOne(BasicEnemy exclude)
     {
         enemyIndexes = new List<int>();
@@ -114,40 +143,47 @@ public class EnemyManager : MonoBehaviour
                 enemyIndexes.Add(i);
         }
 
-        if (enemyIndexes.Count == 0)
-            return null;
+        if (enemyIndexes.Count == 0) return null;
 
-        BasicEnemy randomEnemy;
         int randomIndex = Random.Range(0, enemyIndexes.Count);
-        randomEnemy = allEnemies[enemyIndexes[randomIndex]].basicEnemy;
-
-        return randomEnemy;
+        return allEnemies[enemyIndexes[randomIndex]].basicEnemy;
     }
 
-    // To check if all enemies in a group are alive
+    // Returns living enemy count and updates the public field
     public int LivingEnemyCount()
     {
         int count = 0;
         for (int i = 0; i < allEnemies.Length; i++)
         {
             if (allEnemies[i].basicEnemy != null)
-                count++; 
-
+                count++;
         }
         livingEnemyCount = count;
         return count;
     }
 
-    // To set whether enemies are available to prepare attack
-    public void SetEnemyAvailiability (BasicEnemy enemy, bool state)
+    // Called by BasicEnemy.Death() to remove it from the array slot
+    public void NotifyEnemyDied(BasicEnemy enemy)
     {
         for (int i = 0; i < allEnemies.Length; i++)
         {
-            if (allEnemies[i].basicEnemy == enemy) 
-                allEnemies[i].enemyAvailability = state;
+            if (allEnemies[i].basicEnemy == enemy)
+            {
+                allEnemies[i].basicEnemy = null;
+                allEnemies[i].enemyAvailability = false;
+                return;
+            }
         }
     }
 
+    public void SetEnemyAvailiability(BasicEnemy enemy, bool state)
+    {
+        for (int i = 0; i < allEnemies.Length; i++)
+        {
+            if (allEnemies[i].basicEnemy == enemy)
+                allEnemies[i].enemyAvailability = state;
+        }
+    }
 }
 
 //----------ENEMY CLASS------------//

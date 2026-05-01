@@ -17,7 +17,7 @@ GameObject:
   - component: {fileID: 8637951757555789103}
   m_Layer: 0
   m_Name: Player
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -183,6 +183,8 @@ MonoBehaviour:
   jumpArcHeight: 1
   launchForce: 2.5
   launchForwardPunch: 1.2
+  counterWindowDuration: 1.2
+  counterDamageMultiplier: 1.5
 --- !u!1 &7124045281934651003
 GameObject:
   m_ObjectHideFlags: 0
