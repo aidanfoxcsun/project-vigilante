@@ -7,23 +7,38 @@ public class CameraFollow : MonoBehaviour
     [SerializeField] private float lookSpeed = 50f;
     [SerializeField] private Camera mainCamera;
 
+    private float yaw;
+
+    private void Awake()
+    {
+        if (mainCamera == null)
+        {
+            mainCamera = Camera.main;
+        }
+    }
+
     private void Start()
     {
-        mainCamera.transform.position = transform.position - transform.forward * cameraDistance + Vector3.up * cameraDistance * Mathf.Tan(cameraAngle * Mathf.Deg2Rad);
-        mainCamera.transform.LookAt(transform.position);
+        yaw = transform.eulerAngles.y;
 
         Cursor.lockState = CursorLockMode.Locked;
-        // Hide the cursor
         Cursor.visible = false;
     }
 
-    private void Update()
+    private void LateUpdate()
     {
+        if (mainCamera == null) return;
+
         float horizontalInput = Input.GetAxis("Mouse X");
-        if (Mathf.Abs(horizontalInput) > 1f)
-        {
-            transform.Rotate(Vector3.up, horizontalInput * Time.deltaTime * lookSpeed);
-        }
+
+        yaw += horizontalInput * lookSpeed * Time.deltaTime;
+
+        float height = cameraDistance * Mathf.Tan(cameraAngle * Mathf.Deg2Rad);
+
+        Vector3 flatOffset = Quaternion.Euler(0f, yaw, 0f) * Vector3.back * cameraDistance;
+
+        mainCamera.transform.position = transform.position + flatOffset + Vector3.up * height;
+        mainCamera.transform.LookAt(transform.position);
 
         if (Input.GetKeyDown(KeyCode.Escape))
         {
