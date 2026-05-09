@@ -15,10 +15,33 @@ public class PlayerMovement : MonoBehaviour
     private bool sprinting = false;
     private bool dashing = false;
 
+    private bool canMove = true;
+
+    private Animator animator;
+
+    private IEnumerator FreezeMovementForDuration(float duration)
+    {
+        canMove = false;
+        yield return new WaitForSeconds(duration);
+        canMove = true;
+    }
+
+    public bool isDashing => dashing;
+    
+    public void FreezeMovement(float duration)
+    {
+        StartCoroutine(FreezeMovementForDuration(duration));
+    }
+
+    private void Start()
+    {
+        animator = GetComponent<Animator>();
+    }
+
     private void Update()
     {
         Gamepad gamepad = Gamepad.current;
-        if (dashing) return;
+        if (dashing || !canMove) return;
 
         if (mainCamera == null)
         {
@@ -54,16 +77,17 @@ public class PlayerMovement : MonoBehaviour
 
         if (dashPressed)
         {
+            animator.SetTrigger("Dodge");
             StartCoroutine(Dash(moveDir));
             return;
         }
 
         float newMoveSpeed = sprinting ? moveSpeed * sprintFactor : moveSpeed;
+        animator.SetFloat("Speed", (moveDir.magnitude * newMoveSpeed) / (moveSpeed * sprintFactor));
 
         if (moveDir.sqrMagnitude > 0.01f)
         {
             moveDir.Normalize();
-
             transform.position += moveDir * newMoveSpeed * Time.deltaTime;
 
             // Only rotate the player when moving.

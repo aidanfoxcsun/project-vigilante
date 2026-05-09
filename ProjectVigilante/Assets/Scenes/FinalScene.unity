@@ -558,6 +558,8 @@ MonoBehaviour:
   isPreparingAttack: 0
   isRetreating: 0
   isStunned: 0
+  counterIndicator: {fileID: 0}
+  dodgeIndicator: {fileID: 0}
 --- !u!54 &194063691
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -1126,6 +1128,8 @@ MonoBehaviour:
   isPreparingAttack: 0
   isRetreating: 0
   isStunned: 0
+  counterIndicator: {fileID: 0}
+  dodgeIndicator: {fileID: 0}
 --- !u!54 &415000742
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -1428,6 +1432,8 @@ MonoBehaviour:
   isPreparingAttack: 0
   isRetreating: 0
   isStunned: 0
+  counterIndicator: {fileID: 0}
+  dodgeIndicator: {fileID: 0}
 --- !u!54 &492932579
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -1878,6 +1884,8 @@ MonoBehaviour:
   isPreparingAttack: 0
   isRetreating: 0
   isStunned: 0
+  counterIndicator: {fileID: 0}
+  dodgeIndicator: {fileID: 0}
 --- !u!54 &595401328
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -4833,6 +4841,7 @@ PrefabInstance:
     - {fileID: 5289105353893303498, guid: a498f0b51b7b61d4bad910fcd755d723, type: 3}
     - {fileID: -6286796054277208043, guid: a498f0b51b7b61d4bad910fcd755d723, type: 3}
     - {fileID: -644308147638892420, guid: a498f0b51b7b61d4bad910fcd755d723, type: 3}
+    - {fileID: 7220951646423302738, guid: a498f0b51b7b61d4bad910fcd755d723, type: 3}
     m_AddedGameObjects: []
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: a498f0b51b7b61d4bad910fcd755d723, type: 3}
@@ -5765,6 +5774,7 @@ GameObject:
   - component: {fileID: 4933433677752466722}
   - component: {fileID: 8637951759150178460}
   - component: {fileID: 5590600916284534891}
+  - component: {fileID: 8637951759150178461}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -5785,6 +5795,8 @@ GameObject:
   - component: {fileID: 5083300100463335359}
   - component: {fileID: 151496257786754267}
   - component: {fileID: 5990558658294766205}
+  - component: {fileID: 7124045280542630857}
+  - component: {fileID: 7124045280542630858}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -5792,6 +5804,72 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &7124045280542630857
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7124045280542630856}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8af44c28e8e732c4e8fe5dd0c6ccccc9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CameraShake
+  impulseSource: {fileID: 7124045280542630858}
+--- !u!114 &7124045280542630858
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7124045280542630856}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 180ecf9b41d478f468eb3e9083753217, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineImpulseSource
+  ImpulseDefinition:
+    ImpulseChannel: 1
+    ImpulseShape: 2
+    CustomImpulseShape:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    ImpulseDuration: 0.2
+    ImpulseType: 0
+    DissipationRate: 0.25
+    RawSignal: {fileID: 0}
+    AmplitudeGain: 1
+    FrequencyGain: 1
+    RepeatMode: 0
+    Randomize: 1
+    TimeEnvelope:
+      AttackShape:
+        serializedVersion: 2
+        m_Curve: []
+        m_PreInfinity: 2
+        m_PostInfinity: 2
+        m_RotationOrder: 4
+      DecayShape:
+        serializedVersion: 2
+        m_Curve: []
+        m_PreInfinity: 2
+        m_PostInfinity: 2
+        m_RotationOrder: 4
+      AttackTime: 0
+      SustainTime: 0.2
+      DecayTime: 0.7
+      ScaleWithImpact: 1
+      HoldForever: 0
+    ImpactRadius: 100
+    DirectionMode: 0
+    DissipationMode: 2
+    DissipationDistance: 100
+    PropagationSpeed: 343
+  DefaultVelocity: {x: 0, y: -1, z: 0}
 --- !u!4 &7168812689521062982
 Transform:
   m_ObjectHideFlags: 0
@@ -5955,8 +6033,29 @@ MonoBehaviour:
   jumpArcHeight: 1
   launchForce: 2.5
   launchForwardPunch: 1.2
-  counterWindowDuration: 1.2
   counterDamageMultiplier: 1.5
+--- !u!95 &8637951759150178461
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6981658592698176391}
+  m_Enabled: 1
+  m_Avatar: {fileID: 9000000, guid: 1b8c647926384794c87eac835ebebdbb, type: 3}
+  m_Controller: {fileID: 9100000, guid: 5b45845e6ae748745b057888c4fb43a0, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
 --- !u!114 &9182587088775047559
 MonoBehaviour:
   m_ObjectHideFlags: 0

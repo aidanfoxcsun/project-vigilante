@@ -6,6 +6,8 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
 {
     //-----------------------------------DECLARES--------------------------//
     public Transform player;
+    private PlayerCombat playerCombat;
+    private bool registeredWithPlayer = false;
     private NavMeshAgent agent;
     private EnemyManager enemyManager;
     private Coroutine MovementCoroutine;
@@ -57,6 +59,10 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
     [SerializeField] private bool isStunned;
     private bool MovementCoroutineActive = false;
 
+    [Header("Combat Effects")]
+    [SerializeField] private GameObject counterIndicator;
+    [SerializeField] private GameObject dodgeIndicator;
+
     private float defaultAgentSpeed;
     private float defaultAgentRadius;
     private float lastDestinationSetTime = -999f;
@@ -100,7 +106,7 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
     // Called by an Animation Event at the start of the attack animation
     public void SignalAttack()
     {
-        //counterIndicator?.Show();
+        counterIndicator?.SetActive(true);
         OnAttackSignaled?.Invoke(this);
     }
 
@@ -108,7 +114,7 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
     {
         // Cancel your attack animation / coroutine here
         //animator.SetTrigger("Interrupted");
-        //counterIndicator?.Hide();
+        counterIndicator?.SetActive(false);
 
         // Stop the attack startup coroutine too, otherwise it can turn attacking back on after the counter.
         if (PrepareAttackCoroutine != null)
@@ -130,6 +136,9 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
         // ----------------------------------- //
         agent = GetComponent<NavMeshAgent>();
 
+        counterIndicator.SetActive(false);
+        dodgeIndicator.SetActive(false);
+
         if (agent == null)
         {
             Debug.LogError(name + " needs a NavMeshAgent for BasicEnemy movement.");
@@ -147,6 +156,17 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
 
         stoppingDistance = Random.Range(4.0f, 10.0f);
 
+        if (player == null)
+        {
+            Debug.LogError(name + " does not have a player Transform assigned.");
+            enabled = false;
+            return;
+        }
+        else
+        {
+            playerCombat = player.GetComponent<PlayerCombat>();
+        }
+
         StartEncircleCoroutine();
     }
 
@@ -158,6 +178,7 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
         {
             // Only roll a new idle/encircle choice while the enemy is close enough to be engaged with the player.
             yield return new WaitUntil(() => player != null && isWaiting == true && FlatDistanceToPlayer() <= stoppingDistance && !isPreparingAttack && !isRetreating);
+            if (playerCombat == null) playerCombat = player.GetComponent<PlayerCombat>();
 
             Debug.Log("Encricle Coroutine started");
             int randomChance = Random.Range(0, 2);
@@ -203,7 +224,7 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
 
     private void TrackPlayerAtStoppingDistance()
     {
-        Debug.Log("Enemy tracking player");
+        //Debug.Log("Enemy tracking player");
 
         if (enemyManager != null)
             enemyManager.SetEnemyAvailiability(this, false);
@@ -229,7 +250,13 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
 
     private void EngagePlayerAtCloseRange()
     {
-        Debug.Log("Enemy in range");
+        //Debug.Log("Enemy in range");
+
+        if(!registeredWithPlayer && playerCombat != null)
+        {
+            playerCombat.RegisterAttacker(this);
+            registeredWithPlayer = true;
+        }
 
         if (enemyManager != null)
             enemyManager.SetEnemyAvailiability(this, !isPreparingAttack && !isRetreating);
@@ -247,6 +274,9 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
     {
         StopCoroutinesEnemy();
 
+        if (playerCombat != null)
+            playerCombat.UnregisterAttacker(this);
+
         if (enemyManager != null)
             enemyManager.SetEnemyAvailiability(this, false);
 
@@ -263,6 +293,8 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
         IEnumerator PrepRetreat()
         {
             yield return new WaitForSeconds(1.4f);
+            counterIndicator?.SetActive(false);
+            dodgeIndicator?.SetActive(false);
             isRetreating = true;
             moveDirection = -Vector3.forward;
             isMoving = true;
@@ -296,11 +328,25 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
         {
             PrepareAttack(true);
             yield return new WaitForSeconds(0.2f);
-            Debug.Log("Attacking!");
+            SignalAttack(); // signal counter window opens here
+            Debug.Log("Attack signaled, waiting for animation wind-up...");
             agent.radius = attackAgentRadius;
             stoppingDistance = attackStoppingDistance;
             moveDirection = Vector3.forward;
             isMoving = true;
+
+            // Wait until in attack range, THEN actually strike
+            yield return new WaitUntil(() => FlatDistanceToPlayer() < attackRange);
+
+            OnAttackCanceled?.Invoke(this); // close counter window if somehow still open when attack lands
+            counterIndicator?.SetActive(false);
+
+            yield return new WaitForSeconds(0.1f);
+
+            // Trigger actual hit here (animation event, damage, etc.)
+            Debug.Log("Attack landed!");
+            CameraShake.Instance.Shake(0.5f);
+            PrepareAttack(false);
         }
     }
 
