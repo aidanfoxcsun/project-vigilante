@@ -14,6 +14,8 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
     private Coroutine PrepareAttackCoroutine;
     private Coroutine RetreatCoroutine;
 
+    [SerializeField] private Animator animator;
+
     [Header("Enemy Stats")]
     public float health = 20;
     private float moveSpeed = 1;
@@ -69,6 +71,8 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
     private Vector3 currentDestination;
     private bool hasDestination;
 
+    private bool isDead = false;
+
     //-----------------------------------ENEMY MANAGER BOOLS--------------------------//
     public bool IsPreparingAttack()
     {
@@ -92,13 +96,23 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
 
     public void TakeDamage(float damage)
     {
+        animator.SetTrigger("GetHit");
+
         health -= damage;
         Debug.Log("Enemy took " + damage + " damage. Remaining health: " + health);
         if (health <= 0)
         {
             Death();
-            Destroy(gameObject);
+            StartCoroutine(Die());
         }
+    }
+
+    IEnumerator Die()
+    {
+        // Play death animation here
+        animator.SetBool("IsDead", true);
+        yield return new WaitForSeconds(5f); // Wait for the animation to finish (adjust as needed)
+        Destroy(gameObject);
     }
 
     // Inside your enemy class   simplified example
@@ -135,6 +149,8 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
         enemyManager = GetComponentInParent<EnemyManager>();
         // ----------------------------------- //
         agent = GetComponent<NavMeshAgent>();
+
+        animator.SetBool("IsDead", false);
 
         counterIndicator.SetActive(false);
         dodgeIndicator.SetActive(false);
@@ -201,7 +217,7 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
 
     void Update()
     {
-        if (player == null || agent == null)
+        if (player == null || agent == null || isDead)
             return;
 
         if (isStunned)
@@ -211,6 +227,10 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
         }
 
         float distanceToPlayer = FlatDistanceToPlayer();
+
+        float speed = agent.velocity.magnitude;
+        animator.SetFloat("Speed", speed);
+
 
         if (distanceToPlayer > stoppingDistance + engageDistanceBuffer)
         {
@@ -273,6 +293,9 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
     void Death()
     {
         StopCoroutinesEnemy();
+
+        GetComponent<CapsuleCollider>().enabled = false;
+        agent.enabled = false;
 
         if (playerCombat != null)
             playerCombat.UnregisterAttacker(this);
@@ -340,6 +363,8 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
 
             OnAttackCanceled?.Invoke(this); // close counter window if somehow still open when attack lands
             counterIndicator?.SetActive(false);
+
+            animator.SetTrigger("Attack");
 
             yield return new WaitForSeconds(0.1f);
 
@@ -409,15 +434,6 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
         }
 
         if (!isPreparingAttack) return;
-
-
-        //attack logic
-        if (FlatDistanceToPlayer() < attackRange)
-        {
-            StopMoving();
-            Debug.Log("Player has been attacked");
-            PrepareAttack(false);
-        }
     }
 
     //----------------------------------------HELPER STUFF------------------------------------//
