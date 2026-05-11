@@ -26,6 +26,9 @@ public class PlayerCombat : MonoBehaviour, IDamageable
     public float maxHealth = 100f;
     private float currentHealth;
 
+    [Header("Combat Effects")]
+    [SerializeField] private WeaponEffects weaponEffects;
+
     // private state 
     private bool attacking;
     private bool countering;
@@ -42,6 +45,20 @@ public class PlayerCombat : MonoBehaviour, IDamageable
 
     private bool isDead = false;
     private bool isInvincible = false;
+
+    public static PlayerCombat Instance;
+
+    private void Awake()
+    {
+        Instance = this;
+    }
+
+    public void Heal(float amount)
+    {
+        if (isDead) return;
+        currentHealth = Mathf.Min(currentHealth + amount, maxHealth);
+        HealthUI.Instance.UpdateHealthUI(currentHealth, maxHealth);
+    }
 
     public void RegisterAttacker(IAttacker attacker)
     {
@@ -65,6 +82,7 @@ public class PlayerCombat : MonoBehaviour, IDamageable
         animator = GetComponent<Animator>();
         animator.SetBool("HasTarget", false);
         currentHealth = maxHealth;
+        HealthUI.Instance.UpdateHealthUI(currentHealth, maxHealth);
     }
 
     private void Update()
@@ -298,6 +316,7 @@ public class PlayerCombat : MonoBehaviour, IDamageable
                     ? attackDamage * counterDamageMultiplier
                     : attackDamage;
 
+                weaponEffects.PlayStrikeEffect();
                 damageable.TakeDamage(damage);
 
                 if (ComboManager.Instance != null)
