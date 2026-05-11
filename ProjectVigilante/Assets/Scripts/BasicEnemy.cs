@@ -155,6 +155,9 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
         // ----------------------------------- //
         agent = GetComponent<NavMeshAgent>();
 
+        //gets player transform
+        player = GameObject.FindGameObjectWithTag("Player").transform;
+
         animator.SetBool("IsDead", false);
 
         counterIndicator.SetActive(false);
