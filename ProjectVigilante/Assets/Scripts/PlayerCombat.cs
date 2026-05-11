@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
 
-public class PlayerCombat : MonoBehaviour
+public class PlayerCombat : MonoBehaviour, IDamageable
 {
     [Header("Attack Settings")]
     public float attackRadius = 10f;
@@ -22,6 +22,10 @@ public class PlayerCombat : MonoBehaviour
     // Damage multiplier applied to a successful counter hit.
     public float counterDamageMultiplier = 1.5f;
 
+    [Header("Player Health")]
+    public float maxHealth = 100f;
+    private float currentHealth;
+
     // private state 
     private bool attacking;
     private bool countering;
@@ -35,6 +39,9 @@ public class PlayerCombat : MonoBehaviour
 
     private Animator animator;
     private PlayerMovement movement;
+
+    private bool isDead = false;
+    private bool isInvincible = false;
 
     public void RegisterAttacker(IAttacker attacker)
     {
@@ -57,6 +64,7 @@ public class PlayerCombat : MonoBehaviour
         movement = GetComponent<PlayerMovement>();
         animator = GetComponent<Animator>();
         animator.SetBool("HasTarget", false);
+        currentHealth = maxHealth;
     }
 
     private void Update()
@@ -100,6 +108,34 @@ public class PlayerCombat : MonoBehaviour
             animator.SetTrigger("AttackStart");
             movement.FreezeMovement(1.5f); // Briefly freeze to punish missed input, but not so long that it feels bad.
         }
+    }
+
+    IEnumerator DelayHit(float delay, float damage)
+    {
+        yield return new WaitForSeconds(delay);
+        currentHealth -= damage;
+        animator.SetTrigger("GetHit");
+        HealthUI.Instance.UpdateHealthUI(currentHealth, maxHealth);
+
+        if (currentHealth <= 0)
+        {
+            Die();
+        }
+    }
+
+    public void TakeDamage(float damage)
+    {
+        if (isInvincible || isDead) return; // Can't be damaged while invincible or dead.
+
+        StartCoroutine(DelayHit(0.5f, damage)); // 1 second of invincibility after taking dama
+    }
+
+    private void Die()
+    {
+        // disable input, play anim, load game over, etc.
+        animator.SetTrigger("Die");
+        isDead = true;
+        movement.FreezeMovement(999f);
     }
 
     private readonly HashSet<IAttacker> subscribedAttackers = new();
@@ -279,8 +315,17 @@ public class PlayerCombat : MonoBehaviour
             }
         }
 
+        StartCoroutine(InvincibilityWindow(0.5f));
+
         attacking = false;
         countering = false;
+    }
+
+    private IEnumerator InvincibilityWindow(float duration)
+    {
+        isInvincible = true;
+        yield return new WaitForSeconds(duration);
+        isInvincible = false;
     }
 
     private void OnDestroy()

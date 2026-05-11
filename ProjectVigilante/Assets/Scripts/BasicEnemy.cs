@@ -7,6 +7,7 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
     //-----------------------------------DECLARES--------------------------//
     public Transform player;
     private PlayerCombat playerCombat;
+    private IDamageable playerDamageable;
     private bool registeredWithPlayer = false;
     private NavMeshAgent agent;
     private EnemyManager enemyManager;
@@ -73,6 +74,8 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
 
     private bool isDead = false;
 
+    private bool attackLanded = false;
+
     //-----------------------------------ENEMY MANAGER BOOLS--------------------------//
     public bool IsPreparingAttack()
     {
@@ -111,7 +114,8 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
     {
         // Play death animation here
         animator.SetBool("IsDead", true);
-        yield return new WaitForSeconds(5f); // Wait for the animation to finish (adjust as needed)
+        yield return new WaitForSeconds(2f); // Wait for the animation to finish (adjust as needed)
+        counterIndicator?.SetActive(false);
         Destroy(gameObject);
     }
 
@@ -128,6 +132,7 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
     {
         // Cancel your attack animation / coroutine here
         //animator.SetTrigger("Interrupted");
+        attackLanded = true; // Prevent the attack from landing if it was close to hitting when interrupted
         counterIndicator?.SetActive(false);
 
         // Stop the attack startup coroutine too, otherwise it can turn attacking back on after the counter.
@@ -181,6 +186,7 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
         else
         {
             playerCombat = player.GetComponent<PlayerCombat>();
+            playerDamageable = player.GetComponent<IDamageable>();
         }
 
         StartEncircleCoroutine();
@@ -359,6 +365,7 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
             isMoving = true;
 
             // Wait until in attack range, THEN actually strike
+            attackLanded = false;
             yield return new WaitUntil(() => FlatDistanceToPlayer() < attackRange);
 
             OnAttackCanceled?.Invoke(this); // close counter window if somehow still open when attack lands
@@ -368,9 +375,12 @@ public class BasicEnemy : MonoBehaviour, ITarget, IDamageable, IAttacker
 
             yield return new WaitForSeconds(0.1f);
 
+            if (attackLanded) yield break;
+
             // Trigger actual hit here (animation event, damage, etc.)
             Debug.Log("Attack landed!");
             CameraShake.Instance.Shake(0.5f);
+            playerDamageable?.TakeDamage(10f);
             PrepareAttack(false);
         }
     }

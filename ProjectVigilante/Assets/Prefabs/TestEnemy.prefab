@@ -467,7 +467,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BasicEnemy
   player: {fileID: 0}
   animator: {fileID: 4866699339499482741}
-  health: 20
+  health: 50
   moveDirection: {x: 0, y: 0, z: 0}
   stoppingDistance: 0
   trackingDestinationRefreshTime: 0.15
