@@ -15,15 +15,47 @@ public class PlayerMovement : MonoBehaviour
     private bool sprinting = false;
     private bool dashing = false;
 
+    private bool canMove = true;
+
+    private Animator animator;
+
+    private IEnumerator FreezeMovementForDuration(float duration)
+    {
+        canMove = false;
+        yield return new WaitForSeconds(duration);
+        canMove = true;
+    }
+
+    public bool isDashing => dashing;
+    
+    public void FreezeMovement(float duration)
+    {
+        StartCoroutine(FreezeMovementForDuration(duration));
+    }
+
+    private void Start()
+    {
+        animator = GetComponent<Animator>();
+    }
+
     private void Update()
     {
         Gamepad gamepad = Gamepad.current;
-        if (dashing) return;
+        if (dashing || !canMove) return;
 
-        Vector3 lookDir = mainCamera.transform.forward;
-        lookDir.y = 0;
-        Vector3 moveDir = lookDir.normalized;
-        Vector3 rightDir = Vector3.Cross(Vector3.up, moveDir).normalized;
+        if (mainCamera == null)
+        {
+            mainCamera = Camera.main;
+            if (mainCamera == null) return;
+        }
+
+        Vector3 cameraForward = mainCamera.transform.forward;
+        cameraForward.y = 0f;
+        cameraForward.Normalize();
+
+        Vector3 cameraRight = mainCamera.transform.right;
+        cameraRight.y = 0f;
+        cameraRight.Normalize();
 
         if (gamepad != null)
         {
@@ -37,30 +69,44 @@ public class PlayerMovement : MonoBehaviour
             sprinting = Input.GetKey(KeyCode.LeftShift);
         }
 
-        if (moveDir != Vector3.zero) transform.rotation = Quaternion.LookRotation(moveDir);
+        Vector3 moveDir = cameraForward * moveInput.y + cameraRight * moveInput.x;
 
-        if(gamepad.buttonEast.wasPressedThisFrame)
+        bool dashPressed = gamepad != null
+            ? gamepad.buttonEast.wasPressedThisFrame
+            : Input.GetKeyDown(KeyCode.LeftControl);
+
+        if (dashPressed)
         {
-            StartCoroutine(Dash(moveDir, rightDir));
+            animator.SetTrigger("Dodge");
+            StartCoroutine(Dash(moveDir));
             return;
         }
 
         float newMoveSpeed = sprinting ? moveSpeed * sprintFactor : moveSpeed;
+        animator.SetFloat("Speed", (moveDir.magnitude * newMoveSpeed) / (moveSpeed * sprintFactor));
 
-        if (moveInput.magnitude > 0.1f)
+        if (moveDir.sqrMagnitude > 0.01f)
         {
-            transform.position += moveDir * moveInput.y * newMoveSpeed * Time.deltaTime;
-            transform.position += rightDir * moveInput.x * newMoveSpeed * Time.deltaTime;
-            return;
+            moveDir.Normalize();
+            transform.position += moveDir * newMoveSpeed * Time.deltaTime;
+
+            // Only rotate the player when moving.
+            transform.rotation = Quaternion.LookRotation(moveDir);
         }
     }
 
-    private IEnumerator Dash(Vector3 moveDir, Vector3 rightDir)
+    private IEnumerator Dash(Vector3 dashDir)
     {
         dashing = true;
 
-        Vector3 dashDir = moveDir * moveInput.y + rightDir * moveInput.x;
-        if (dashDir.magnitude < 0.1f) dashDir = transform.forward;
+        if (dashDir.sqrMagnitude < 0.01f)
+        {
+            dashDir = transform.forward;
+        }
+        else
+        {
+            dashDir.Normalize();
+        }
 
         float startTime = Time.time;
         while (Time.time < startTime + dashDuration)
@@ -68,6 +114,7 @@ public class PlayerMovement : MonoBehaviour
             transform.position += dashDir * dashSpeed * Time.deltaTime;
             yield return null;
         }
+
         yield return new WaitForSeconds(dashCooldown);
         dashing = false;
     }

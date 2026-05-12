@@ -1,10 +1,11 @@
-using System.Collections.Generic;
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
 
-public class PlayerCombat : MonoBehaviour
+public class PlayerCombat : MonoBehaviour, IDamageable
 {
     [Header("Attack Settings")]
     public float attackRadius = 10f;
@@ -18,10 +19,15 @@ public class PlayerCombat : MonoBehaviour
     public float launchForwardPunch = 2f;
 
     [Header("Counter Settings")]
-    // How long after SignalAttack the player can press counter.
-    public float counterWindowDuration = 1.2f;
     // Damage multiplier applied to a successful counter hit.
     public float counterDamageMultiplier = 1.5f;
+
+    [Header("Player Health")]
+    public float maxHealth = 100f;
+    private float currentHealth;
+
+    [Header("Combat Effects")]
+    [SerializeField] private WeaponEffects weaponEffects;
 
     // private state 
     private bool attacking;
@@ -32,23 +38,60 @@ public class PlayerCombat : MonoBehaviour
     private Transform pendingCounterTransform;
     private Coroutine counterWindowCoroutine;
 
+    private List<ITarget> targetsInRange = new List<ITarget>();
+
+    private Animator animator;
+    private PlayerMovement movement;
+
+    private bool isDead = false;
+    private bool isInvincible = false;
+
+    public static PlayerCombat Instance;
+
+    private void Awake()
+    {
+        Instance = this;
+    }
+
+    public void Heal(float amount)
+    {
+        if (isDead) return;
+        currentHealth = Mathf.Min(currentHealth + amount, maxHealth);
+        HealthUI.Instance.UpdateHealthUI(currentHealth, maxHealth);
+    }
+
+    public void RegisterAttacker(IAttacker attacker)
+    {
+        SubscribeToAttacker(attacker);
+        targetsInRange.Add(attacker as ITarget);
+        Debug.Log($"[Counter] Registered attacker: {((MonoBehaviour)attacker).name}");
+    }
+
+    public void UnregisterAttacker(IAttacker attacker)
+    {
+        if (!subscribedAttackers.Contains(attacker)) return;
+        attacker.OnAttackSignaled -= HandleAttackSignaled;
+        attacker.OnAttackCanceled -= HandleAttackCanceled;
+        subscribedAttackers.Remove(attacker);
+        targetsInRange.Remove(attacker as ITarget);
+    }
+
+    private void Start()
+    {
+        movement = GetComponent<PlayerMovement>();
+        animator = GetComponent<Animator>();
+        animator.SetBool("HasTarget", false);
+        currentHealth = maxHealth;
+        HealthUI.Instance.UpdateHealthUI(currentHealth, maxHealth);
+    }
+
     private void Update()
     {
         Gamepad gamepad = Gamepad.current;
+        animator.SetBool("InCombo", ComboManager.Instance.CurrentCombo > 0);
+        animator.SetBool("HasTarget", targetsInRange.Count > 0);
 
         Collider[] hitColliders = Physics.OverlapSphere(transform.position, attackRadius);
-        List<ITarget> targetsInRange = new List<ITarget>();
-
-        foreach (Collider col in hitColliders)
-        {
-            ITarget t = col.GetComponent<ITarget>();
-            if (t != null) targetsInRange.Add(t);
-
-            // Subscribe to any new IAttacker enemies that enter range.
-            IAttacker attacker = col.GetComponent<IAttacker>();
-            if (attacker != null)
-                SubscribeToAttacker(attacker);
-        }
 
         // Counter input (takes priority over a normal attack) 
         bool counterPressed = (gamepad != null)
@@ -57,6 +100,7 @@ public class PlayerCombat : MonoBehaviour
 
         if (counterPressed && pendingCounterAttacker != null)
         {
+            Debug.Log("[Counter] Performing Counter Attack.");
             StartCoroutine(PerformCounter());
             return;
         }
@@ -70,10 +114,46 @@ public class PlayerCombat : MonoBehaviour
 
         if (attackPressed && targetsInRange.Count > 0)
         {
+            animator.SetBool("HasTarget", true);
+            animator.SetTrigger("AttackStart");
             Transform best = GetClosestTarget(targetsInRange);
             StartCoroutine(ZipToTarget(best, isCounter: false));
         }
+        else if (attackPressed)
+        {
+            Debug.Log("[Combat] No targets in range.");
+            animator.SetBool("HasTarget", false);
+            animator.SetTrigger("AttackStart");
+            movement.FreezeMovement(1.5f); // Briefly freeze to punish missed input, but not so long that it feels bad.
+        }
+    }
 
+    IEnumerator DelayHit(float delay, float damage)
+    {
+        yield return new WaitForSeconds(delay);
+        currentHealth -= damage;
+        animator.SetTrigger("GetHit");
+        HealthUI.Instance.UpdateHealthUI(currentHealth, maxHealth);
+
+        if (currentHealth <= 0)
+        {
+            Die();
+        }
+    }
+
+    public void TakeDamage(float damage)
+    {
+        if (isInvincible || isDead) return; // Can't be damaged while invincible or dead.
+
+        StartCoroutine(DelayHit(0.5f, damage)); // 1 second of invincibility after taking dama
+    }
+
+    private void Die()
+    {
+        // disable input, play anim, load game over, etc.
+        animator.SetTrigger("Die");
+        isDead = true;
+        movement.FreezeMovement(999f);
     }
 
     private readonly HashSet<IAttacker> subscribedAttackers = new();
@@ -88,6 +168,7 @@ public class PlayerCombat : MonoBehaviour
 
     private void HandleAttackSignaled(IAttacker attacker)
     {
+        Debug.Log($"[Counter] Attack signaled by {((MonoBehaviour)attacker).name}.");
         // Only track the nearest / most urgent threat.
         Transform t = (attacker as MonoBehaviour)?.transform;
         if (t == null) return;
@@ -106,7 +187,6 @@ public class PlayerCombat : MonoBehaviour
 
         pendingCounterAttacker = attacker;
         pendingCounterTransform = t;
-        counterWindowCoroutine = StartCoroutine(CounterWindowTimer());
 
         Debug.Log($"[Counter] Window opened — threat: {t.name}");
     }
@@ -115,13 +195,6 @@ public class PlayerCombat : MonoBehaviour
     {
         if (attacker != pendingCounterAttacker) return;
         CloseCounterWindow();
-    }
-
-    private IEnumerator CounterWindowTimer()
-    {
-        yield return new WaitForSeconds(counterWindowDuration);
-        CloseCounterWindow();
-        Debug.Log("[Counter] Window expired.");
     }
 
     private void CloseCounterWindow()
@@ -206,6 +279,8 @@ public class PlayerCombat : MonoBehaviour
 
         if (target == null) yield break;
 
+        animator.SetTrigger("AttackStart");
+
         Vector3 startPos = transform.position;
         Vector3 dirFromTargetToPlayer = (startPos - target.position).normalized;
         Vector3 finalLandingPoint = target.position + dirFromTargetToPlayer * endDistance;
@@ -241,6 +316,7 @@ public class PlayerCombat : MonoBehaviour
                     ? attackDamage * counterDamageMultiplier
                     : attackDamage;
 
+                weaponEffects.PlayStrikeEffect();
                 damageable.TakeDamage(damage);
 
                 if (ComboManager.Instance != null)
@@ -258,8 +334,17 @@ public class PlayerCombat : MonoBehaviour
             }
         }
 
+        StartCoroutine(InvincibilityWindow(0.5f));
+
         attacking = false;
         countering = false;
+    }
+
+    private IEnumerator InvincibilityWindow(float duration)
+    {
+        isInvincible = true;
+        yield return new WaitForSeconds(duration);
+        isInvincible = false;
     }
 
     private void OnDestroy()

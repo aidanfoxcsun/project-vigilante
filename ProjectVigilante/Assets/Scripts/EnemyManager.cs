@@ -41,7 +41,7 @@ public class EnemyManager : MonoBehaviour
         Debug.Log("Loop started");
         if (LivingEnemyCount() == 0)
         {
-            StopCoroutine(AI_Loop(null));
+            StopCoroutine(AI_Loop_Coroutine);
             yield break;
         }
 
